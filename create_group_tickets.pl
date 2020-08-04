@@ -7,6 +7,7 @@ use Mojo::DOM;
 use WWW::Mechanize;
 
 my ( $opt, $usage ) = describe_options(
+    'create_group_tickets.pl %o',
     [ 'url=s', "Base URL for RT", { required => 1 } ],
     [ 'username|u=s', "RT username", { required => 1 } ],
     [ 'password|p=s', "RT password", { required => 1 } ],
@@ -57,11 +58,16 @@ foreach my $group_id ( @group_ids ) {
     my $element = $dom->find( "div#header h1" )->first;
     my $group_name = $element->text;
     $group_name =~ s/Modify the group //;
-    say "GROUP: $group_name";
+
+    say "GROUP: $group_name" if $opt->verbose;
 
     my $emails = $dom->find( 'ul li a[href^=/User/Summary.html]' )->to_array;
     my @addresses;
-    push( @addresses, $_->text ) for @$emails;
+    foreach my $email ( @$emails ) {
+        next if $email->text =~ /^Logged in as/;
+        say $email->text if $opt->verbose;
+        push( @addresses, $email->text );
+    }
 
-    $groups->{group_name} = \@addresses;
+    $groups->{$group_name} = \@addresses;
 }
