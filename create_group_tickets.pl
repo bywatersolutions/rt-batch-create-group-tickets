@@ -9,6 +9,7 @@ use Mojo::DOM;
 use RT::Client::REST::Ticket;
 use RT::Client::REST;
 use WWW::Mechanize;
+use File::Slurp;
 
 my ( $opt, $usage ) = describe_options(
     'create_group_tickets.pl %o',
@@ -17,12 +18,20 @@ my ( $opt, $usage ) = describe_options(
     [ 'password|p=s', "RT password", { required => 1 } ],
     [],
     [ 'subject|s=s', "Ticket subject", { required => 1 } ],
-    [ 'message|m=s', "Ticket message", { required => 1 } ],
+    [ 'message|m=s', "Ticket message"],
+    [ 'message-file|mf=s', "File path for ticket message"],
     [],
+    [ 'confirm|c', "Confirm tickets should actually be created" ],
     [ 'verbose|v', "print extra stuff" ],
     [ 'help', "print usage message and exit", { shortcircuit => 1 } ],
 );
 print( $usage->text ), exit if $opt->help;
+print( $usage->text ), exit unless ( $opt->message || $opt->message_file ) && !( $opt->message && $opt->message_file );
+
+my $message_file = $opt->message_file;
+if ( $message_file ) {
+    say "Cannot read $message_file", exit unless ( $message_file && -r $message_file );
+}
 
 my $url = $opt->url;
 my $username = $opt->username;
@@ -40,6 +49,15 @@ try {
 catch Exception::Class::Base with {
     die "problem logging in: ", shift->message;
 };
+
+my $subject = $opt->subject;
+my $message = $opt->message || File::Slurp::read_file($message_file);
+
+say "TICKET SUBJECT: $subject" if $opt->verbose;
+say "TICKET MESSAGE:\n$message" if $opt->verbose;
+
+say "You must pass the --confirm|-c option to continue with actual ticket create" unless $opt->confirm;
+exit unless $opt->confirm;
 
 
 my $groups_url = qq{$url/Admin/Groups/index.html?Format=%27%3Ca%20href%3D%22__WebPath__%2FAdmin%2FGroups%2FModify.html%3Fid%3D__id__%22%3E__id__%3C%2Fa%3E%2FTITLE%3A%23%27%2C%27%3Ca%20href%3D%22__WebPath__%2FAdmin%2FGroups%2FModify.html%3Fid%3D__id__%22%3E__Name__%3C%2Fa%3E%2FTITLE%3AName%27%2C%27__Description__%27%2C__Disabled__&Order=ASC&OrderBy=Name&Page=1&Rows=5000};
@@ -111,9 +129,6 @@ foreach my $group_id ( @group_ids ) {
 foreach my $group_name ( keys %$groups ) {
     my $group = $groups->{$group_name};
 
-    my $subject = $opt->subject;
-    my $message = $opt->message;
-
     my @requestors = @$group;
 
     my $ticket = RT::Client::REST::Ticket->new(
@@ -124,6 +139,7 @@ foreach my $group_name ( keys %$groups ) {
         status     => 'open',
         requestors => \@requestors,
     )->store( text => q{} );
+
     say "TICKET CREATED: ", $ticket->id if $opt->verbose;
 
     $ticket->correspond(
