@@ -142,7 +142,11 @@ foreach my $group_name ( keys %$groups ) {
 
     say "TICKET CREATED: ", $ticket->id if $opt->verbose;
 
+    sleep 1;
+
     $ticket->correspond(
         message => $message,
     );
+
+    sleep 1;
 }
